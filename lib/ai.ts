@@ -22,7 +22,7 @@ function createAnthropicStream(prompt: string, signal?: AbortSignal) {
   const anthropic = createAnthropicClient();
   const stream = anthropic.messages.stream({
     model: getAnthropicModel(),
-    max_tokens: 8000,
+    max_tokens: 6000,
     messages: [{ role: "user", content: prompt }],
   });
   const encoder = new TextEncoder();
@@ -32,6 +32,9 @@ function createAnthropicStream(prompt: string, signal?: AbortSignal) {
     async start(controller) {
       try {
         for await (const event of stream) {
+          if (event.type === "message_delta" && event.delta.stop_reason === "max_tokens") {
+            throw new Error("The model reached its output limit before completing the visualizer. Try a simpler request.");
+          }
           if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
             controller.enqueue(encoder.encode(event.delta.text));
           }

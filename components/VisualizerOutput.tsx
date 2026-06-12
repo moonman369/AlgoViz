@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 interface Props {
   html: string | null;
   isLoading: boolean;
+  loadingMessage?: string;
   problemName?: string;
   difficulty?: Difficulty;
 }
@@ -21,7 +22,7 @@ const difficultyStyles: Record<Difficulty, string> = {
   Hard: "bg-red-500/15 text-red-600 dark:text-red-400",
 };
 
-export function VisualizerOutput({ html, isLoading, problemName, difficulty }: Props) {
+export function VisualizerOutput({ html, isLoading, loadingMessage, problemName, difficulty }: Props) {
   const [copied, setCopied] = useState(false);
   const [height, setHeight] = useState(760);
 
@@ -50,7 +51,7 @@ export function VisualizerOutput({ html, isLoading, problemName, difficulty }: P
     setTimeout(() => setCopied(false), 1500);
   };
 
-  if (isLoading) return <StateCard><LoaderCircle className="h-12 w-12 animate-spin text-blue-500" /><p className="text-lg font-medium">Generating your visualizer…</p><div className="flex gap-1">{[0, 1, 2].map((item) => <span key={item} className="h-2 w-2 animate-pulse rounded-full bg-blue-500" style={{ animationDelay: `${item * 180}ms` }} />)}</div></StateCard>;
+  if (isLoading) return <StateCard><LoaderCircle className="h-12 w-12 animate-spin text-blue-500" /><div className="text-center"><p className="text-lg font-medium">Generating your visualizer…</p><p className="mt-1 text-sm text-muted-foreground">{loadingMessage}</p></div><div className="flex gap-1">{[0, 1, 2].map((item) => <span key={item} className="h-2 w-2 animate-pulse rounded-full bg-blue-500" style={{ animationDelay: `${item * 180}ms` }} />)}</div></StateCard>;
   if (!html) return <StateCard><span className="grid h-20 w-20 place-items-center rounded-2xl bg-blue-500/10"><Binary className="h-10 w-10 text-blue-500" /></span><div className="text-center"><p className="text-lg font-medium">Your interactive visualizer will appear here</p><p className="mt-1 text-sm text-muted-foreground">Fill in the form to create an educational walkthrough.</p></div></StateCard>;
 
   return (

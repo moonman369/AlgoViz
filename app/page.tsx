@@ -17,11 +17,13 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [generationStatus, setGenerationStatus] = useState("Waiting for the model to plan the visualizer…");
 
   const generate = async (data: VisualizerFormData) => {
     setFormData(data);
     setIsLoading(true);
     setError(null);
+    setGenerationStatus("Waiting for the model to plan the visualizer…");
     try {
       const response = await fetch("/api/generate", {
         method: "POST",
@@ -41,12 +43,11 @@ export default function Home() {
         const { done, value } = await reader.read();
         if (done) break;
         html += decoder.decode(value, { stream: true });
+        if (html.trim()) setGenerationStatus("Receiving and assembling the visualizer…");
       }
       html += decoder.decode();
-      const normalized = html.trim();
-      if (!/^<!doctype html/i.test(normalized) && !/^<html/i.test(normalized)) {
-        throw new Error("Generation failed — model returned unexpected output. Try again.");
-      }
+      const normalized = html.trim().replace(/^```html\s*/i, "").replace(/\s*```$/, "").trim();
+      validateGeneratedHtml(normalized);
       setGeneratedHtml(normalized);
       setOutputData(data);
       saveToHistory(data, normalized);
@@ -71,9 +72,36 @@ export default function Home() {
       {error && <div className="mx-auto mt-4 flex max-w-[1800px] items-center gap-3 px-4 sm:px-6"><div className="flex w-full items-center gap-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300"><AlertCircle className="h-4 w-4 shrink-0" /><span className="flex-1">{error}</span><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setError(null)}><X className="h-4 w-4" /></Button></div></div>}
       <main className="mx-auto grid max-w-[1800px] gap-5 p-4 sm:p-6 lg:grid-cols-[380px_minmax(0,1fr)] lg:items-start">
         <div className="lg:sticky lg:top-[88px]"><VisualizerForm initialData={formData} isLoading={isLoading} onSubmit={generate} /></div>
-        <VisualizerOutput html={generatedHtml} isLoading={isLoading} problemName={outputData?.problemName} difficulty={outputData?.difficulty} />
+        <VisualizerOutput html={generatedHtml} isLoading={isLoading} loadingMessage={generationStatus} problemName={outputData?.problemName} difficulty={outputData?.difficulty} />
       </main>
       <HistoryPanel open={historyOpen} onOpenChange={setHistoryOpen} onRestore={restore} />
     </div>
   );
+}
+
+function validateGeneratedHtml(html: string) {
+  if (!/^<!doctype html>/i.test(html) || !/<\/html>\s*$/i.test(html)) {
+    throw new Error("Generation was incomplete. The model did not return a complete HTML document. Try again.");
+  }
+  if (!/<script[\s>]/i.test(html) || !/<\/script>/i.test(html)) {
+    throw new Error("Generation failed — the visualizer does not contain interactive JavaScript.");
+  }
+  const document = new DOMParser().parseFromString(html, "text/html");
+  try {
+    document.querySelectorAll("script").forEach((script) => {
+      Function(script.textContent || "");
+    });
+  } catch {
+    throw new Error("Generation failed — the model returned invalid JavaScript. Try again.");
+  }
+  const requiredControls = ["prev", "next", "play", "pause", "reset"];
+  if (requiredControls.some((control) => !new RegExp(`\\b${control}\\b`, "i").test(html))) {
+    throw new Error("Generation failed — the model omitted required visualizer controls. Try again.");
+  }
+  if (!/\bparseInput\s*\(/.test(html) || !/\bbuildSteps\s*\(/.test(html)) {
+    throw new Error("Generation failed — the visualizer does not regenerate its steps from custom input. Try again.");
+  }
+  if (/\.\.\.|\/\/\s*(add|implement|todo)|\/\*\s*(add|implement|todo)/i.test(html)) {
+    throw new Error("Generation failed — the model returned placeholder or incomplete code. Try again.");
+  }
 }
